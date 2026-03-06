@@ -1,0 +1,510 @@
+import SwiftUI
+
+struct MoneyView: View {
+    @ObservedObject var account: AccountModel
+    @Binding var showEdit: Bool
+    @Binding var showCard: Bool
+    @Binding var showSend: Bool
+    @Binding var showNotifications: Bool
+    @State private var balanceHidden = false
+    @State private var toastMessage: String? = nil
+
+    var isDark: Bool { account.isDarkMode }
+    var bg: Color { isDark ? Color(hex: "000000") : Color(hex: "f2f2f7") }
+    var cardBg: Color { isDark ? Color(hex: "111111") : Color(hex: "ffffff") }
+    var textP: Color { isDark ? .white : .black }
+    var textS: Color { isDark ? Color(hex: "8e8e93") : Color(hex: "6c6c70") }
+    var tileBg: Color { isDark ? Color(hex: "1c1c1e") : Color(hex: "ffffff") }
+    var btnBg: Color { isDark ? Color(hex: "1c1c1e") : Color(hex: "eeeeee") }
+
+    var body: some View {
+        ZStack {
+            bg.ignoresSafeArea()
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    // ── Header ──────────────────────────────
+                    headerRow
+                        .padding(.horizontal, 20)
+                        .padding(.top, 56)
+                        .padding(.bottom, 20)
+
+                    // ── Card (full card like screenshots) ───
+                    cardView
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 0)
+                        .onTapGesture { showCard = true }
+
+                    // ── White slide-up section ───────────────
+                    balanceSection
+                        .cornerRadius(28, corners: [.topLeft, .topRight])
+                        .padding(.top, -20)
+
+                    // ── Savings tile ──────────────────────────
+                    savingsTile.padding(.horizontal, 16).padding(.top, 12)
+
+                    // ── Bitcoin tile ──────────────────────────
+                    bitcoinTile.padding(.horizontal, 16).padding(.top, 12)
+
+                    // ── More for you ──────────────────────────
+                    moreForYou
+
+                    // ── Add money ─────────────────────────────
+                    addMoneySection
+
+                    // ── Disclosure ────────────────────────────
+                    disclosureText
+
+                    Color.clear.frame(height: 90)
+                }
+            }
+
+            // Toast
+            if let msg = toastMessage {
+                VStack {
+                    Spacer().frame(height: 65)
+                    Text(msg)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20).padding(.vertical, 12)
+                        .background(Color(hex: "1c1c1e"))
+                        .cornerRadius(14)
+                    Spacer()
+                }
+                .zIndex(99)
+            }
+        }
+    }
+
+    // MARK: Header
+    var headerRow: some View {
+        HStack {
+            Text("Money")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(textP)
+            Spacer()
+            Button(action: {}) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(textP)
+            }
+            .padding(.trailing, 14)
+
+            Button(action: { showEdit = true }) {
+                ZStack(alignment: .topTrailing) {
+                    if account.useEmojiProfile {
+                        Circle()
+                            .fill(Color(hex: account.profileColor))
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Text(account.profileEmoji)
+                                    .font(.system(size: 18))
+                            )
+                    } else {
+                        Circle()
+                            .fill(LinearGradient(colors: [Color(hex: "1a4a8a"), Color(hex: "0d2d5e")],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Text(account.profileLetter.isEmpty ? "?" : String(account.profileLetter.prefix(1)))
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                            )
+                    }
+                    if account.notificationCount > 0 {
+                        Circle().fill(Color.red).frame(width: 16, height: 16)
+                            .overlay(Text("\(min(account.notificationCount, 9))")
+                                .font(.system(size: 9, weight: .bold)).foregroundColor(.white))
+                            .overlay(Circle().stroke(bg, lineWidth: 2))
+                            .offset(x: 4, y: -4)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Card (full card like screenshots 1-3)
+    var cardView: some View {
+        ZStack(alignment: .topLeading) {
+            // Card background
+            RoundedRectangle(cornerRadius: 20)
+                .fill(LinearGradient(
+                    colors: account.cardStyle.gradient,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ))
+                .frame(height: 200)
+                .shadow(color: .black.opacity(0.4), radius: 16, x: 0, y: 8)
+
+            VStack(alignment: .leading, spacing: 0) {
+                // Top row: chip label + cashtag
+                HStack {
+                    // Card chip pill
+                    HStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(account.cardStyle.textColor.opacity(0.3))
+                            .frame(width: 20, height: 15)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(account.cardStyle.textColor.opacity(0.6))
+                                    .frame(width: 8, height: 5)
+                            )
+                        Text("•• \(account.cardLastFour)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(account.cardStyle.textColor)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(account.cardStyle.textColor.opacity(0.12))
+                    .cornerRadius(20)
+
+                    Spacer()
+                    Text(account.cashtag)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(account.cardStyle.textColor.opacity(0.85))
+                }
+                .padding(.horizontal, 18).padding(.top, 18)
+
+                Spacer()
+
+                // Big $ chip icon
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    account.cardStyle.textColor.opacity(0.25),
+                                    account.cardStyle.textColor.opacity(0.15)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 58, height: 46)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(account.cardStyle.textColor.opacity(0.3), lineWidth: 1)
+                        )
+
+                    // Chip lines pattern
+                    VStack(spacing: 3) {
+                        HStack(spacing: 3) {
+                            chipLine(w: 12)
+                            chipLine(w: 18)
+                        }
+                        HStack(spacing: 3) {
+                            chipLine(w: 22)
+                            chipLine(w: 12)
+                        }
+                        HStack(spacing: 3) {
+                            chipLine(w: 10)
+                            chipLine(w: 20)
+                        }
+                    }
+                    .opacity(0.5)
+
+                    Text("$")
+                        .font(.system(size: 22, weight: .heavy))
+                        .foregroundColor(account.cardStyle.textColor.opacity(0.7))
+                }
+                .padding(.horizontal, 18).padding(.bottom, 20)
+            }
+        }
+        .frame(height: 200)
+    }
+
+    func chipLine(w: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(account.cardStyle.textColor)
+            .frame(width: w, height: 3)
+    }
+
+    // MARK: Balance Section
+    var balanceSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Cash balance row
+            HStack {
+                HStack(spacing: 5) {
+                    Text("Cash balance •• \(account.accountLastFour)")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(textP)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(textP)
+                }
+                Spacer()
+                Button(action: { balanceHidden.toggle() }) {
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 20))
+                        .foregroundColor(textS)
+                }
+            }
+            .padding(.horizontal, 22).padding(.top, 26).padding(.bottom, 4)
+
+            // Balance
+            Text(balanceHidden ? "••••••" : account.balanceDisplay)
+                .font(.system(size: 50, weight: .bold))
+                .foregroundColor(textP)
+                .tracking(-1.5)
+                .padding(.horizontal, 22).padding(.bottom, 28)
+
+            // Add / Withdraw buttons
+            HStack(spacing: 12) {
+                actionBtn("Add money")
+                actionBtn("Withdraw")
+            }
+            .padding(.horizontal, 22).padding(.bottom, 14)
+
+            // Green status — phone outline shape, green border only
+            greenStatusBox
+                .padding(.horizontal, 22).padding(.bottom, 22)
+        }
+        .background(isDark ? Color(hex: "111111") : Color(hex: "f5f5f5"))
+    }
+
+    func actionBtn(_ t: String) -> some View {
+        Button(action: { toast("\(t) tapped") }) {
+            Text(t)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(textP)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 17)
+                .background(btnBg)
+                .cornerRadius(50)
+        }
+    }
+
+    // MARK: Green Status — phone-shaped outline, no fill
+    var greenStatusBox: some View {
+        HStack(spacing: 12) {
+            // Phone shape: outline only, green
+            PhoneShape()
+                .stroke(Color(hex: "00D632"), lineWidth: 2.5)
+                .frame(width: 20, height: 32)
+
+            Text("Green status")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(textP)
+            Spacer()
+            Text(account.greenStatusText)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(textS)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 16)
+        .background(tileBg)
+        .cornerRadius(16)
+    }
+
+    // MARK: Savings
+    var savingsTile: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 20).fill(tileBg)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Savings").font(.system(size: 15, weight: .medium)).foregroundColor(textP)
+                    Text(account.savingsDisplay).font(.system(size: 28, weight: .bold)).foregroundColor(textP)
+                    Text("Up to 3.25% interest").font(.system(size: 13)).foregroundColor(textS)
+                }
+                Spacer()
+                Circle().stroke(Color(hex: "00D632"), lineWidth: 2).frame(width: 44, height: 44)
+                    .overlay(Text("$").font(.system(size: 20, weight: .bold)).foregroundColor(Color(hex: "00D632")))
+            }
+            .padding(18)
+        }
+    }
+
+    // MARK: Bitcoin
+    var bitcoinTile: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 20).fill(tileBg)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Bitcoin").font(.system(size: 15, weight: .medium)).foregroundColor(textP)
+                    Text(account.bitcoinDisplay).font(.system(size: 28, weight: .bold)).foregroundColor(textP)
+                    HStack(spacing: 4) {
+                        Image(systemName: account.bitcoinChange >= 0 ? "arrow.up" : "arrow.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(account.bitcoinChange >= 0 ? Color(hex: "00D632") : .red)
+                        Text(String(format: "%.2f%%", abs(account.bitcoinChange)))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(account.bitcoinChange >= 0 ? Color(hex: "00D632") : .red)
+                        Text("today").font(.system(size: 13)).foregroundColor(textS)
+                    }
+                }
+                Spacer()
+                BitcoinMiniChart(positive: account.bitcoinChange >= 0).frame(width: 100, height: 50)
+            }
+            .padding(18)
+        }
+    }
+
+    // MARK: More for you
+    var moreForYou: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("More for you")
+                .font(.system(size: 22, weight: .bold)).foregroundColor(textP)
+                .padding(.horizontal, 20).padding(.top, 28).padding(.bottom, 16)
+
+            ForEach([("💵","Paychecks","Get paid faster"),
+                     ("🪙","Bitcoin","Learn and invest"),
+                     ("🌹","Savings","Up to 3.25% interest"),
+                     ("📈","Stocks","Invest with $1"),
+                     ("💎","Pools","Collect money with anyone")], id: \.1) { icon, label, sub in
+                HStack(spacing: 14) {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(isDark ? Color(hex: "2c2c2e") : Color(hex: "f0f0f0"))
+                        .frame(width: 52, height: 52)
+                        .overlay(Text(icon).font(.system(size: 26)))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(label).font(.system(size: 17, weight: .semibold)).foregroundColor(textP)
+                        Text(sub).font(.system(size: 14)).foregroundColor(textS)
+                    }
+                    Spacer()
+                    Button(action: { toast("Starting \(label)") }) {
+                        Text("Start")
+                            .font(.system(size: 15, weight: .semibold)).foregroundColor(textP)
+                            .padding(.horizontal, 18).padding(.vertical, 8)
+                            .background(isDark ? Color(hex: "2c2c2e") : Color(hex: "f0f0f0"))
+                            .cornerRadius(20)
+                    }
+                }
+                .padding(.horizontal, 20).padding(.bottom, 20)
+            }
+        }
+    }
+
+    // MARK: Add money
+    var addMoneySection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Add money")
+                .font(.system(size: 22, weight: .bold)).foregroundColor(textP)
+                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 4)
+
+            ForEach(Array([("arrow.down.to.line","Direct deposit"),
+                           ("arrow.2.circlepath","Get bank or wire transfer"),
+                           ("banknote","Deposit paper money"),
+                           ("doc.viewfinder","Deposit check"),
+                           ("repeat","Auto reload")].enumerated()), id: \.offset) { i, row in
+                VStack(spacing: 0) {
+                    HStack(spacing: 16) {
+                        Image(systemName: row.0).font(.system(size: 20)).foregroundColor(textP).frame(width: 28)
+                        Text(row.1).font(.system(size: 17, weight: .medium)).foregroundColor(textP)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundColor(textS)
+                    }
+                    .padding(.horizontal, 20).padding(.vertical, 18)
+                    .contentShape(Rectangle()).onTapGesture { toast("\(row.1) tapped") }
+                    if i < 4 { Divider().padding(.leading, 64) }
+                }
+            }
+        }
+    }
+
+    // MARK: Disclosure
+    var disclosureText: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            (Text("Your balance is eligible for FDIC pass-through insurance through Wells Fargo Bank, N.A., Sutton Bank, and/or The Bancorp Bank, N.A., Members FDIC for up to $250,000 per customer. See the ")
+             + Text("Cash App Terms of Service.").underline())
+            .font(.system(size: 11, design: .monospaced)).foregroundColor(textS)
+            (Text("Banking services provided by Cash App's bank partner(s). Brokerage services by Cash App Investing LLC. ")
+             + Text("Disclosures").underline())
+            .font(.system(size: 11, design: .monospaced)).foregroundColor(textS)
+        }
+        .padding(.horizontal, 20).padding(.vertical, 24)
+    }
+
+    func toast(_ msg: String) {
+        withAnimation { toastMessage = msg }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { toastMessage = nil } }
+    }
+}
+
+// MARK: - Phone Shape (green status outline)
+struct PhoneShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let w = rect.width, h = rect.height
+        let r: CGFloat = w * 0.25
+        // Rounded rectangle body
+        p.addRoundedRect(in: CGRect(x: 0, y: h * 0.08, width: w, height: h * 0.84),
+                         cornerSize: CGSize(width: r, height: r))
+        // Speaker notch at top
+        let notchW = w * 0.4
+        let notchH: CGFloat = 3
+        p.addRoundedRect(in: CGRect(x: (w - notchW)/2, y: h * 0.08 + 4, width: notchW, height: notchH),
+                         cornerSize: CGSize(width: 1.5, height: 1.5))
+        // Home button at bottom
+        let btnSize: CGFloat = w * 0.3
+        p.addEllipse(in: CGRect(x: (w - btnSize)/2, y: h * 0.92 - btnSize/2, width: btnSize, height: btnSize))
+        return p
+    }
+}
+
+// MARK: - Bitcoin mini chart
+struct BitcoinMiniChart: View {
+    var positive: Bool
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let pts: [CGFloat] = [0.6,0.75,0.5,0.7,0.45,0.55,0.35,0.5,0.3,0.45,0.2,0.35,0.15,0.25,0.1]
+            let step = w / CGFloat(pts.count - 1)
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: h * pts[0]))
+                for (i, pt) in pts.enumerated() { path.addLine(to: CGPoint(x: CGFloat(i)*step, y: h*pt)) }
+            }
+            .stroke(positive ? Color(hex: "00D632") : Color.red,
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+        }
+    }
+}
+
+// MARK: - Bottom Tab Bar
+struct BottomTabBar: View {
+    @ObservedObject var account: AccountModel
+    @Binding var selectedTab: Int
+    @Binding var showSend: Bool
+    @Binding var showNotifications: Bool
+
+    var isDark: Bool { account.isDarkMode }
+    var bg: Color { isDark ? Color(hex: "0a0a0a") : .white }
+    var active: Color { isDark ? .white : .black }
+    var inactive: Color { isDark ? Color(hex: "636366") : Color(hex: "aaaaaa") }
+
+    var body: some View {
+        HStack {
+            Spacer()
+            // Balance
+            Button(action: { selectedTab = 0 }) {
+                Text(account.balanceRounded)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(selectedTab == 0 ? active : inactive)
+            }
+            Spacer()
+            // Send $
+            Button(action: { showSend = true }) {
+                Text("$")
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundColor(inactive)
+            }
+            Spacer()
+            // Clock / notifications
+            ZStack(alignment: .topTrailing) {
+                Button(action: { showNotifications = true }) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 22))
+                        .foregroundColor(selectedTab == 2 ? active : inactive)
+                }
+                if account.notificationCount > 0 {
+                    Circle().fill(Color.red).frame(width: 16, height: 16)
+                        .overlay(Text("\(min(account.notificationCount,9))")
+                            .font(.system(size: 9, weight: .bold)).foregroundColor(.white))
+                        .overlay(Circle().stroke(bg, lineWidth: 2))
+                        .offset(x: 9, y: -9)
+                }
+            }
+            Spacer()
+        }
+        .padding(.top, 12).padding(.bottom, 34)
+        .background(bg.ignoresSafeArea(edges: .bottom))
+        .overlay(Divider().background(isDark ? Color(hex: "2c2c2e") : Color(hex: "e0e0e0")), alignment: .top)
+    }
+}
